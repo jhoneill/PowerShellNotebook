@@ -1,3 +1,7 @@
+## JO'N 7th June 2021
+Smarter placing of <br/> when handling Html output in `Get-NotebookContent`
+Added conversion of ansi color sequences to HTML Spans 
+
 ## JO'N May 2021
 Merged DF's code with my additions from late 2020 - see below ...
 Added Horizontal rules either side of output in `ConvertFrom-ipynb`

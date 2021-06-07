@@ -52,6 +52,26 @@ function Convert-PSToColorizedHTML {
         $stringBuilder.ToString()
     }
 }
+function Convert-EscapeToHTMLSpan {
+    param ($Text)
+    #escape sequence codes are 90-97 (bright) 30-37 (normal) for black, red, green, yellow,  blue, magenta, cyan, white
+    $lookup =   @{ '30' ='#000000'; '31' ='#7f0000'; '32' ='#007f00'; '33' ='#7f7f00'; '34' ='#00007f'; '35' ='#7f007f'; '36' ='#007f7f'; '37' ='#c0c0c0'
+                   '90' ='#7f7f7f'; '91' ='#ff0000'; '92' ='#00ff00'; '99' ='#ffff00'; '94' ='#0000ff'; '95' ='#ff00ff'; '96' ='#00ffff'; '97' ='#ffffff'
+    }
+    #only check for simple colors `e [ 30-30,90-97 m   <Text with no escapes> `e [ 0 m
+    $matches = @() +  [regex]::Matches($Text,'(?s)\e\[([39][0-7])m([^\e]*?)\e\[0m')
+    if ($matches) {
+        #Length of the string will change for each match, so work from end towards start wrapping the escaped text in <span style='color:xxx'>   </span>
+        ($matches.Count -1)..0 | ForEach-Object  {
+            $match    = $matches[$_]
+            $before   = $Text.Substring(0,$match.Index)
+            $after    = $Text.Substring($match.Index + $match.Length )
+            $Text     = $before + "<span style='color:$($lookup[$match.Groups[1].value])'>$($match.Groups[2].value)</span>" + $after
+        }
+    }
+    $Text.Trim()
+}
+
 function ConvertFrom-IPYNB {
     <#
       .SYNOPSIS
@@ -94,14 +114,17 @@ function ConvertFrom-IPYNB {
         #Destination for output file - defaults to source_file_name with appropriate extension
         [Alias('Outpath')]
         $Destination ,
-        #Output is only included in the markdown if explicitly requested
+        #Output is only included in the markdown / HTML if explicitly requested
         [Parameter(ParameterSetName="MD")]
         [Parameter(ParameterSetName="Html")]
         [Switch]$Includeoutput,
+        #If specified outputs HTML instead of a .MD file
+        [Parameter(ParameterSetName="Html")]
+        [Switch]$AsHTML,
         #If specified outputs a PowerShell script instead of a .MD file
         [Parameter(ParameterSetName="Script")]
         [Switch]$AsScript,
-        #If specified, labels cells with their language
+        #If specified, labels cells with their language, for multi-language notebooks
         [Parameter(ParameterSetName="MD")]
         [Parameter(ParameterSetName="Html")]
         [Switch]$AddLanguageLabels
@@ -174,7 +197,7 @@ function ConvertFrom-IPYNB {
 
                     #There will only be output if we specified the -IncludeOutput and we will ignore output which isn't a string or a single HTML block.
                     if     ($_.HTMLOutput)             {"----`n`n" + ($_.HTMLOutput -replace  '\s*</?html>\s*','' -replace  '[\r\n]*$',"`n") +"`n----`n"}
-                    elseif ($_.Output -is [string])    {"----`n" + '```' + "`n" + $_.Output.trim() + "`n" + '```' + "`n----`n"}
+                    elseif ($_.Output -is [string])    {"----`n" + '```' + "`n" + (Convert-EscapeToHTMLSpan $_.Output ) + "`n" + '```' + "`n----`n"}
                     #elseif ($_.output.count -eq 1 -and
                     #        $_.output.'text/html')     {"----`n" + ($_.output.'text/html' -replace  '</?html>','') + "`n`n----`n"}
                     elseif ($Includeoutput) {
